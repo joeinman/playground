@@ -3,7 +3,7 @@
 
 #include <rpixel/rpixel.hpp>
 #include <neo/neo.hpp>
-#include <neo/rectangle.hpp>
+#include <neo/component/rectangle.hpp>
 
 constexpr uint8_t LEDDataPin = 4;
 constexpr uint8_t LEDCount   = 30;
