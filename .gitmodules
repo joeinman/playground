@@ -4,3 +4,6 @@
 [submodule "libs/rpixel"]
 	path = libs/rpixel
 	url = https://github.com/joeinman/rpixel
+[submodule "libs/neo"]
+	path = libs/neo
+	url = https://github.com/joeinman/neo
