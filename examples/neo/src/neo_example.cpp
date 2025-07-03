@@ -16,7 +16,7 @@ class NotificationBarScene : public Scene
 {
     const uint8_t IndicatorWidth = 5;
     const uint8_t BarWidth       = 8;
-    const uint8_t rangeX         = static_cast<uint8_t>((LEDCount - 2 * IndicatorWidth) - BarWidth + 1);
+    const uint8_t XRange         = static_cast<uint8_t>((LEDCount - 2 * IndicatorWidth) - BarWidth + 1);
 
 public:
     NotificationBarScene()
@@ -32,7 +32,7 @@ public:
         Scene::tick(time_us);
 
         auto    waveform_value = getComponent(3)->getOutput<double>("waveform_value").value();
-        uint8_t x              = IndicatorWidth + static_cast<uint8_t>(waveform_value * rangeX);
+        uint8_t x              = IndicatorWidth + static_cast<uint8_t>(waveform_value * XRange);
         setComponentProperty<uint8_t>(2, "x", x);
     }
 };
