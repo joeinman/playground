@@ -5,11 +5,21 @@
 #include <neo/neo.hpp>
 #include <neo/component/rectangle.hpp>
 
+#include <math.h>
+
 constexpr uint8_t LEDDataPin = 4;
 constexpr uint8_t LEDCount   = 30;
 constexpr bool    IsRGBW     = false;
 
+constexpr uint64_t BarWidth = 4;
+
 using namespace jsi::neo;
+
+float get_sin(float frequency_hz)
+{
+    float raw = sinf(2.0f * M_PI * frequency_hz * (time_us_64() * 1e-6f));
+    return 0.5f * (raw + 1.0f);
+}
 
 int main()
 {
@@ -24,14 +34,14 @@ int main()
         [&led_strip]() { led_strip.show(); },
         time_us_64);
 
-    auto scene = std::make_shared<Scene>();
-    scene->addComponent<Rectangle>(0, 0, LEDCount - 10, 1, Color(255, 0, 0));
-    scene->addComponent<Rectangle>(LEDCount - 10, 0, 10, 1, Color(0, 0, 255));
-
+    auto scene     = std::make_shared<Scene>();
+    auto redRectId = scene->addComponent<Rectangle>(0, 0, BarWidth, 1, Color(255, 0, 0));
     neo->loadScene(scene);
 
     while (true)
     {
+        auto x = get_sin(1) * (LEDCount - BarWidth);
+        scene->setComponentProperty<int>(redRectId, "x", x);
         neo->spin();
     }
 }
