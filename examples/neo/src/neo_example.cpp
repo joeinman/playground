@@ -13,6 +13,7 @@ constexpr bool    IsRGBW     = false;
 
 constexpr uint64_t IndicatorWidth = 5;
 constexpr uint64_t BarWidth       = 8;
+constexpr uint64_t rangeX         = (LEDCount - 2 * IndicatorWidth) - BarWidth + 1;
 
 using namespace jsi::neo;
 
@@ -41,13 +42,11 @@ int main()
     auto redRectId = scene->addComponent<Rectangle>(0, 0, BarWidth, 1, Color(255, 100, 0));
     neo->loadScene(scene);
 
-    const uint64_t minX   = IndicatorWidth;
-    const uint64_t rangeX = (LEDCount - 2 * IndicatorWidth) - BarWidth + 1;
-
     while (true)
     {
-        uint64_t x = minX + (uint64_t) (get_sin(1) * rangeX);
+        uint64_t x = IndicatorWidth + (uint64_t) (get_sin(1) * rangeX);
         scene->setComponentProperty<int>(redRectId, "x", x);
+
         neo->spin();
     }
 }
