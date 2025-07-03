@@ -48,9 +48,6 @@ int main()
         uint8_t x = IndicatorWidth + (uint8_t) (get_sin(1) * rangeX);
         scene->setComponentProperty<uint8_t>(bar_id, "x", x);
 
-        bool on = get_sin(3) > 0.5f;
-        scene->setComponentProperty<Color>(bar_id, "color", Color(255, 100, 0, on ? 255 : 0));
-
         neo->spin();
     }
 }
