@@ -4,8 +4,7 @@
 #include <rpixel/rpixel.hpp>
 #include <neo/neo.hpp>
 #include <neo/component/rectangle.hpp>
-
-#include <math.h>
+#include <neo/component/waveform_generator.hpp>
 
 constexpr uint8_t LEDDataPin = 4;
 constexpr uint8_t LEDCount   = 30;
@@ -16,13 +15,6 @@ constexpr uint64_t BarWidth       = 8;
 constexpr uint64_t rangeX         = (LEDCount - 2 * IndicatorWidth) - BarWidth + 1;
 
 using namespace jsi::neo;
-
-float get_sin(float frequency_hz)
-{
-    float time_sec = static_cast<float>(time_us_64()) * 1e-6f;
-    float raw      = sinf(2.0f * static_cast<float>(M_PI) * frequency_hz * time_sec);
-    return 0.5f * (raw + 1.0f);
-}
 
 int main()
 {
@@ -40,12 +32,15 @@ int main()
     auto scene = std::make_shared<Scene>();
     scene->addComponent<Rectangle>(0, 0, IndicatorWidth, 1, Color(255, 255, 150));
     scene->addComponent<Rectangle>(LEDCount - IndicatorWidth, 0, IndicatorWidth, 1, Color(255, 255, 150));
-    auto bar_id = scene->addComponent<Rectangle>(0, 0, BarWidth, 1, Color(255, 255, 0, 180));
+    auto bar_id          = scene->addComponent<Rectangle>(0, 0, BarWidth, 1, Color(255, 255, 0, 180));
+    auto waveform_gen_id = scene->addComponent<WaveformGenerator>(1.0, WaveformType::kTriangle);
     neo->loadScene(scene);
 
     while (true)
     {
-        uint8_t x = IndicatorWidth + (uint8_t) (get_sin(1) * rangeX);
+        uint8_t x = IndicatorWidth +
+                    static_cast<uint8_t>(
+                        scene->getComponent(waveform_gen_id)->getOutput<double>("waveform_value").value() * rangeX);
         scene->setComponentProperty<uint8_t>(bar_id, "x", x);
 
         neo->spin();
