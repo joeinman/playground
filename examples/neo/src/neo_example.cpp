@@ -50,8 +50,7 @@ int main()
         [&led_strip]() { led_strip.show(); },
         time_us_64);
 
-    auto scene = std::make_shared<NotificationBarScene>();
-    neo->loadScene(scene);
+    neo->loadScene(std::make_shared<NotificationBarScene>());
 
     while (true)
     {
