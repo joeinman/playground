@@ -19,7 +19,8 @@ using namespace jsi::neo;
 
 float get_sin(float frequency_hz)
 {
-    float raw = sinf(2.0f * M_PI * frequency_hz * (time_us_64() * 1e-6f));
+    float time_sec = static_cast<float>(time_us_64()) * 1e-6f;
+    float raw      = sinf(2.0f * static_cast<float>(M_PI) * frequency_hz * time_sec);
     return 0.5f * (raw + 1.0f);
 }
 
@@ -37,15 +38,18 @@ int main()
         time_us_64);
 
     auto scene = std::make_shared<Scene>();
-    scene->addComponent<Rectangle>(0, 0, IndicatorWidth, 1, Color(255, 255, 255));
-    scene->addComponent<Rectangle>(LEDCount - IndicatorWidth, 0, IndicatorWidth, 1, Color(255, 255, 255));
-    auto redRectId = scene->addComponent<Rectangle>(0, 0, BarWidth, 1, Color(255, 100, 0));
+    scene->addComponent<Rectangle>(0, 0, IndicatorWidth, 1, Color(255, 255, 150));
+    scene->addComponent<Rectangle>(LEDCount - IndicatorWidth, 0, IndicatorWidth, 1, Color(255, 255, 150));
+    auto bar_id = scene->addComponent<Rectangle>(0, 0, BarWidth, 1, Color(255, 255, 0, 180));
     neo->loadScene(scene);
 
     while (true)
     {
-        uint64_t x = IndicatorWidth + (uint64_t) (get_sin(1) * rangeX);
-        scene->setComponentProperty<int>(redRectId, "x", x);
+        uint8_t x = IndicatorWidth + (uint8_t) (get_sin(1) * rangeX);
+        scene->setComponentProperty<uint8_t>(bar_id, "x", x);
+
+        bool on = get_sin(3) > 0.5f;
+        scene->setComponentProperty<Color>(bar_id, "color", Color(255, 100, 0, on ? 255 : 0));
 
         neo->spin();
     }
