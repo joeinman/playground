@@ -11,7 +11,8 @@ constexpr uint8_t LEDDataPin = 4;
 constexpr uint8_t LEDCount   = 30;
 constexpr bool    IsRGBW     = false;
 
-constexpr uint64_t BarWidth = 4;
+constexpr uint64_t IndicatorWidth = 5;
+constexpr uint64_t BarWidth       = 8;
 
 using namespace jsi::neo;
 
@@ -34,13 +35,18 @@ int main()
         [&led_strip]() { led_strip.show(); },
         time_us_64);
 
-    auto scene     = std::make_shared<Scene>();
-    auto redRectId = scene->addComponent<Rectangle>(0, 0, BarWidth, 1, Color(255, 0, 0));
+    auto scene = std::make_shared<Scene>();
+    scene->addComponent<Rectangle>(0, 0, IndicatorWidth, 1, Color(255, 255, 255));
+    scene->addComponent<Rectangle>(LEDCount - IndicatorWidth, 0, IndicatorWidth, 1, Color(255, 255, 255));
+    auto redRectId = scene->addComponent<Rectangle>(0, 0, BarWidth, 1, Color(255, 100, 0));
     neo->loadScene(scene);
+
+    const uint64_t minX   = IndicatorWidth;
+    const uint64_t rangeX = (LEDCount - 2 * IndicatorWidth) - BarWidth + 1;
 
     while (true)
     {
-        auto x = get_sin(1) * (LEDCount - BarWidth);
+        uint64_t x = minX + (uint64_t) (get_sin(1) * rangeX);
         scene->setComponentProperty<int>(redRectId, "x", x);
         neo->spin();
     }
