@@ -30,9 +30,9 @@ int main()
         time_us_64);
 
     auto scene = std::make_shared<Scene>();
-    scene->addComponent<Rectangle>(0, 0, IndicatorWidth, 1, Color(255, 255, 150));
-    scene->addComponent<Rectangle>(LEDCount - IndicatorWidth, 0, IndicatorWidth, 1, Color(255, 255, 150));
-    auto bar_id          = scene->addComponent<Rectangle>(0, 0, BarWidth, 1, Color(255, 255, 0, 180));
+    scene->addComponent<Rectangle>(0, 0, IndicatorWidth, 1, Color(255, 255, 255));
+    scene->addComponent<Rectangle>(LEDCount - IndicatorWidth, 0, IndicatorWidth, 1, Color(255, 255, 255));
+    auto bar_id          = scene->addComponent<Rectangle>(0, 0, BarWidth, 1, Color(255, 255, 0));
     auto waveform_gen_id = scene->addComponent<WaveformGenerator>(1.0, WaveformType::kTriangle);
     neo->loadScene(scene);
 
