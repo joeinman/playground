@@ -37,6 +37,30 @@ public:
     }
 };
 
+class FlashingBarScene : public Scene
+{
+public:
+    FlashingBarScene()
+    {
+        addComponent<Rectangle>(0, 0, LEDCount, 1, Color(255, 0, 0));
+        addComponent<WaveformGenerator>(3.0, WaveformType::kSquare);
+    }
+
+    void tick(uint64_t time_us) override
+    {
+        Scene::tick(time_us);
+
+        auto waveform_value = getComponent(1)->getOutput<double>("waveform_value").value();
+        auto bar_colour = std::dynamic_pointer_cast<Rectangle>(getComponent(0))->getProperty<Color>("color").value();
+        setComponentProperty<Color>(0,
+                                    "color",
+                                    Color(bar_colour.r_,
+                                          bar_colour.g_,
+                                          bar_colour.b_,
+                                          static_cast<uint8_t>(waveform_value * 255)));
+    }
+};
+
 int main()
 {
     stdio_init_all();
@@ -50,7 +74,7 @@ int main()
         [&led_strip]() { led_strip.show(); },
         time_us_64);
 
-    neo->loadScene(std::make_shared<NotificationBarScene>());
+    neo->loadScene(std::make_shared<FlashingBarScene>());
 
     while (true)
     {
