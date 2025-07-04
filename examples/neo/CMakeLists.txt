@@ -6,6 +6,11 @@ add_executable(${PROJECT_NAME}
   "src/${PROJECT_NAME}.cpp"
 )
 
+target_include_directories(${PROJECT_NAME}
+  PUBLIC
+    "include"
+)
+
 target_link_libraries(${PROJECT_NAME}
   pico_stdlib
   hardware_i2c
