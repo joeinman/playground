@@ -55,6 +55,17 @@ public:
     }
 };
 
+class FlashingBarScene : public Scene
+{
+public:
+    FlashingBarScene(Color color = Color(255, 0, 0), double frequency = 1.0)
+    {
+        auto bar_id                = addComponent<Rectangle>(0, 0, LEDCount, 1, color);
+        auto waveform_generator_id = addComponent<WaveformGenerator>(frequency, WaveformType::kSquare);
+        connectComponentProperty<double, bool>(waveform_generator_id, "output_value", bar_id, "visible");
+    }
+};
+
 int main()
 {
     stdio_init_all();
@@ -68,7 +79,7 @@ int main()
         [&led_strip]() { led_strip.show(); },
         time_us_64);
 
-    neo->loadScene(std::make_shared<BootingUpScene>());
+    neo->loadScene(std::make_shared<FlashingBarScene>(Color(0, 0, 255), 3.0));
 
     while (true)
     {
