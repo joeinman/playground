@@ -23,13 +23,13 @@ public:
         addComponent<Rectangle>(LEDCount - IndicatorWidth, 0, IndicatorWidth, 1, Color(255, 255, 255));
         auto bar_id                = addComponent<Rectangle>(0, 0, BarWidth, 1, Color(255, 255, 0));
         auto waveform_generator_id = addComponent<WaveformGenerator>(1.0, WaveformType::kTriangle);
-        auto algebra_unit_id       = addComponent<AlgebraUnit<uint8_t>>([](const PortList& properties) -> uint8_t {
+        auto algebra_unit_id       = addComponent<AlgebraUnit<int16_t>>([](const PortList& properties) {
             return IndicatorWidth +
-                   static_cast<uint8_t>(properties.get<double>("waveform_input").value_or(0.0) * XRange);
+                   static_cast<int16_t>(properties.get<double>("waveform_input").value_or(0.0) * XRange);
         });
 
         connectComponentProperty<double>(waveform_generator_id, "output_value", algebra_unit_id, "waveform_input");
-        connectComponentProperty<uint8_t>(algebra_unit_id, "output_value", bar_id, "x");
+        connectComponentProperty<int16_t>(algebra_unit_id, "output_value", bar_id, "x");
     }
 };
 
