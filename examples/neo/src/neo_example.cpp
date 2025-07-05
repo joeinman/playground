@@ -20,7 +20,8 @@ int main()
             led_strip.setPixel(index, r, g, b);
         },
         [&led_strip]() { led_strip.show(); },
-        time_us_64);
+        time_us_64,
+        1.5f);
 
     auto notification_bar = std::make_shared<NotificationBar>();
     neo->loadScene(notification_bar);
@@ -30,16 +31,45 @@ int main()
         auto c = getchar_timeout_us(0);
         if (c != PICO_ERROR_TIMEOUT)
         {
-            if (c == 'e' || c == 'E')
+            if (c == '1')
             {
-                notification_bar->enable_indicators(true);
+                notification_bar->pushEvent(Event<NotificationBarEventType>{NotificationBarEventType::kSetModeOff,
+                                                                            time_us_64(),
+                                                                            time_us_64() + 1000000});
             }
-            else if (c == 'd' || c == 'D')
+            else if (c == '2')
             {
-                notification_bar->enable_indicators(false);
+                notification_bar->pushEvent(Event<NotificationBarEventType>{NotificationBarEventType::kSetModeBootingDown,
+                                                                            time_us_64(),
+                                                                            time_us_64() + 1000000});
+            }
+            else if (c == '3')
+            {
+                notification_bar->pushEvent(Event<NotificationBarEventType>{NotificationBarEventType::kSetModeCharging,
+                                                                            time_us_64(),
+                                                                            time_us_64() + 1000000});
+            }
+            else if (c == '4')
+            {
+                notification_bar->pushEvent(
+                    Event<NotificationBarEventType>{NotificationBarEventType::kSetModeOperational,
+                                                    time_us_64(),
+                                                    time_us_64() + 1000000});
+            }
+            else if (c == '5')
+            {
+                notification_bar->pushEvent(
+                    Event<NotificationBarEventType>{NotificationBarEventType::kSetModeAutonomous,
+                                                    time_us_64(),
+                                                    time_us_64() + 1000000});
+            }
+            else
+            {
+                printf("Unknown command: %c\n", c);
             }
         }
 
+        notification_bar->spin();
         neo->spin();
     }
 }
