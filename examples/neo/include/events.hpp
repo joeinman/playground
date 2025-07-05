@@ -22,9 +22,10 @@ enum class NotificationBarEventType
 {
     kNone = 0,
     kSetModeOff,
-    kSetModeBootingDown,
+    kSetModeBootingUp,
     kSetModeCharging,
     kSetModeOperational,
+    kSetModeBootingDown,
     kSetModeAutonomous
 };
 

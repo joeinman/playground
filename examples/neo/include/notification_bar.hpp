@@ -46,12 +46,25 @@ public:
             auto left_indicator_x  = properties.get<int16_t>("left_indicator_x").value_or(0);
             auto right_indicator_x = properties.get<int16_t>("right_indicator_x").value_or(0);
             auto waveform_input    = properties.get<double>("waveform_generator_output_value").value_or(0.0);
+            auto waveform_generator_waveform_type =
+                properties.get<WaveformType>("waveform_generator_waveform_type").value_or(WaveformType::kTriangle);
 
-            auto res = (right_indicator_x - left_indicator_x - 2 * IndicatorWidth) - 1;
-            return (left_indicator_x + IndicatorWidth) + (res * waveform_input);
+            double  normalized_input = 2.0 * waveform_input - 1.0;
+            int16_t center_point     = LEDCount / 2 - 1;
+            int16_t width = (right_indicator_x - left_indicator_x) - static_cast<int16_t>(2 * IndicatorWidth - 1);
+            if (waveform_generator_waveform_type == WaveformType::kSawtooth)
+            {
+                width += BarWidth * 2;
+            }
+
+            return static_cast<int16_t>(center_point + (normalized_input * (width / 2)) - (IndicatorWidth / 2));
         });
         connectProperties<int16_t>("left_indicator", "x", "position_calculator", "left_indicator_x");
         connectProperties<int16_t>("right_indicator", "x", "position_calculator", "right_indicator_x");
+        connectProperties<WaveformType>("waveform_generator",
+                                        "waveform_type",
+                                        "position_calculator",
+                                        "waveform_generator_waveform_type");
         connectProperties<double>("waveform_generator",
                                   "output_value",
                                   "position_calculator",
@@ -81,14 +94,17 @@ public:
             case NotificationBarEventType::kSetModeOff:
                 handle_off_state();
                 break;
-            case NotificationBarEventType::kSetModeBootingDown:
-                handle_booting_down_state();
+            case NotificationBarEventType::kSetModeBootingUp:
+                handle_booting_up_state();
                 break;
             case NotificationBarEventType::kSetModeCharging:
                 handle_charging_state();
                 break;
             case NotificationBarEventType::kSetModeOperational:
                 handle_operational_state();
+                break;
+            case NotificationBarEventType::kSetModeBootingDown:
+                handle_booting_down_state();
                 break;
             case NotificationBarEventType::kSetModeAutonomous:
                 handle_autonomous_state();
@@ -119,6 +135,21 @@ public:
         enable_indicators(true);
         setComponentProperty<uint8_t>("moving_bar", "a", 250, TransitionType::kLinear, 250000);
         setComponentProperty<double>("waveform_generator", "cycle_position", 0.0);
+        setComponentProperty<WaveformType>("waveform_generator", "waveform_type", WaveformType::kTriangle);
+
+        setComponentProperty<bool>("binding_background_alpha_calculator_output_value_background_a", "enabled", false);
+        setComponentProperty<uint8_t>("background", "a", 0, TransitionType::kLinear, 250000);
+        setComponentProperty<uint8_t>("background", "r", 0, TransitionType::kLinear, 250000);
+        setComponentProperty<uint8_t>("background", "g", 0, TransitionType::kLinear, 250000);
+        setComponentProperty<uint8_t>("background", "b", 0, TransitionType::kLinear, 250000);
+    }
+
+    void handle_booting_up_state()
+    {
+        enable_indicators(true);
+        setComponentProperty<uint8_t>("moving_bar", "a", 250, TransitionType::kLinear, 250000);
+        setComponentProperty<double>("waveform_generator", "cycle_position", 0.0);
+        setComponentProperty<WaveformType>("waveform_generator", "waveform_type", WaveformType::kSawtooth);
 
         setComponentProperty<bool>("binding_background_alpha_calculator_output_value_background_a", "enabled", false);
         setComponentProperty<uint8_t>("background", "a", 0, TransitionType::kLinear, 250000);

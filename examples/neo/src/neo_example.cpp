@@ -39,7 +39,7 @@ int main()
             }
             else if (c == '2')
             {
-                notification_bar->pushEvent(Event<NotificationBarEventType>{NotificationBarEventType::kSetModeBootingDown,
+                notification_bar->pushEvent(Event<NotificationBarEventType>{NotificationBarEventType::kSetModeBootingUp,
                                                                             time_us_64(),
                                                                             time_us_64() + 1000000});
             }
@@ -57,6 +57,13 @@ int main()
                                                     time_us_64() + 1000000});
             }
             else if (c == '5')
+            {
+                notification_bar->pushEvent(
+                    Event<NotificationBarEventType>{NotificationBarEventType::kSetModeBootingDown,
+                                                    time_us_64(),
+                                                    time_us_64() + 1000000});
+            }
+            else if (c == '6')
             {
                 notification_bar->pushEvent(
                     Event<NotificationBarEventType>{NotificationBarEventType::kSetModeAutonomous,
