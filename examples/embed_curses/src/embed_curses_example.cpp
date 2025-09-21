@@ -122,8 +122,18 @@ static void render_history(WINDOW* win, const std::vector<std::string>& history)
     wclrtoeol(win);
     waddstr(win, "Recent commands:");
 
-    const int content_row    = (header_row + 1 < h) ? header_row + 1 : header_row;
-    const int rows_available = (content_row < h) ? (h - content_row) : 0;
+    int content_row = (header_row + 1 < h) ? header_row + 1 : header_row;
+    int list_row    = content_row;
+    int inner_width = w - (base_col ? 2 : 0);
+    if (content_row < h && inner_width > 0)
+    {
+        wattrset(win, COLOR_PAIR(1));
+        wmove(win, content_row, base_col);
+        whline(win, ACS_HLINE, inner_width);
+        list_row = content_row + 1;
+    }
+
+    const int rows_available = (list_row < h) ? (h - list_row) : 0;
     if (rows_available <= 0)
         return;
 
@@ -133,7 +143,7 @@ static void render_history(WINDOW* win, const std::vector<std::string>& history)
     for (int row = 0; row < rows_available; ++row)
     {
         const int idx = start + row;
-        wmove(win, content_row + row, base_col);
+        wmove(win, list_row + row, base_col);
         wclrtoeol(win);
         if (idx < static_cast<int>(history.size()))
             waddstr(win, history[idx].c_str());
@@ -155,6 +165,13 @@ static void render_input(WINDOW* input, const std::string& line)
     wattrset(input, COLOR_PAIR(1));
     if (!line.empty())
         waddstr(input, line.c_str());
+    int underline_row = row + 1;
+    int line_len      = w - (col ? 2 : 0);
+    if (underline_row < h && line_len > 0)
+    {
+        wmove(input, underline_row, col);
+        whline(input, ACS_HLINE, line_len);
+    }
 }
 
 static void append_console_prompt(WINDOW* console, const std::string& line)
@@ -174,7 +191,7 @@ static void clear_console(WINDOW* frame, WINDOW* console)
     if (frame && frame != console)
     {
         wattrset(frame, COLOR_PAIR(1));
-        wborder(frame);
+        box(frame);
     }
 }
 
@@ -251,7 +268,7 @@ int main()
             return;
         wattrset(frame, attr_pair);
         if (height > 1 && width > 1)
-            wborder(frame);
+            box(frame);
     };
 
     apply_frame_border(status_frame, status_height, cols, COLOR_PAIR(3));
