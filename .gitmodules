@@ -4,3 +4,6 @@
 [submodule "libs/rpixel"]
 	path = libs/rpixel
 	url = https://github.com/joeinman/rpixel
+[submodule "libs/embed_curses"]
+	path = libs/embed_curses
+	url = https://github.com/joeinman/embed_curses

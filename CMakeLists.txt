@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set(PICO_PLATFORM rp2350)
+
 # Initialize the Raspberry Pi Pico SDK
 include(libs/pico-sdk/pico_sdk_init.cmake)
 
