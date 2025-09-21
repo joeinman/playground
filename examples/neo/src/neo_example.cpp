@@ -22,61 +22,27 @@ int main()
         [&led_strip]() { led_strip.show(); },
         time_us_64,
         1.5f);
+    neo->setScreenBrightness(0.5);
 
     auto notification_bar = std::make_shared<NotificationBar>();
     neo->loadScene(notification_bar);
 
     while (true)
     {
-        auto c = getchar_timeout_us(0);
+        auto c = getchar_timeout_us(10);
         if (c != PICO_ERROR_TIMEOUT)
         {
-            if (c == '1')
+            // If is a number, set the notification bar mode
+            if (c >= '0' && c <= '9')
             {
-                notification_bar->pushEvent(Event<NotificationBarEventType>{NotificationBarEventType::kSetModeOff,
-                                                                            time_us_64(),
-                                                                            time_us_64() + 1000000});
-            }
-            else if (c == '2')
-            {
-                notification_bar->pushEvent(Event<NotificationBarEventType>{NotificationBarEventType::kSetModeBootingUp,
-                                                                            time_us_64(),
-                                                                            time_us_64() + 1000000});
-            }
-            else if (c == '3')
-            {
-                notification_bar->pushEvent(Event<NotificationBarEventType>{NotificationBarEventType::kSetModeCharging,
-                                                                            time_us_64(),
-                                                                            time_us_64() + 1000000});
-            }
-            else if (c == '4')
-            {
-                notification_bar->pushEvent(
-                    Event<NotificationBarEventType>{NotificationBarEventType::kSetModeOperational,
-                                                    time_us_64(),
-                                                    time_us_64() + 1000000});
-            }
-            else if (c == '5')
-            {
-                notification_bar->pushEvent(
-                    Event<NotificationBarEventType>{NotificationBarEventType::kSetModeBootingDown,
-                                                    time_us_64(),
-                                                    time_us_64() + 1000000});
-            }
-            else if (c == '6')
-            {
-                notification_bar->pushEvent(
-                    Event<NotificationBarEventType>{NotificationBarEventType::kSetModeAutonomous,
-                                                    time_us_64(),
-                                                    time_us_64() + 1000000});
-            }
-            else
-            {
-                printf("Unknown command: %c\n", c);
+                uint8_t mode = c - '0';
+                if (mode < static_cast<uint8_t>(NotificationBarMode::kHardEStop) + 1)
+                {
+                    notification_bar->set_mode(static_cast<NotificationBarMode>(mode));
+                }
             }
         }
 
-        notification_bar->spin();
         neo->spin();
     }
 }
