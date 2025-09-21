@@ -6,7 +6,6 @@
 
 using namespace jsi::ecurses;
 
-// --- Dummy font ---
 class DemoFont : public IFont
 {
 public:
@@ -20,7 +19,6 @@ public:
     }
 };
 
-// --- ANSI backend display ---
 class AnsiTerminalDisplay : public ICursesDisplay
 {
 public:
@@ -77,18 +75,13 @@ private:
     std::vector<Cell> _grid;
 };
 
-// --- Input (USB serial on Pico, no-op otherwise) ---
 class StdioInput : public ICursesInput
 {
 public:
     int poll_key() override
     {
-#ifdef PICO_ON_DEVICE
         int ch = getchar_timeout_us(0);
         return (ch == PICO_ERROR_TIMEOUT) ? KEY_NONE : ch;
-#else
-        return getchar();
-#endif
     }
 };
 
@@ -117,7 +110,7 @@ static void execute_command(const std::string& cmd)
 static void prompt()
 {
     attrset(COLOR_PAIR(1));
-    printw("C:\\>");
+    printw("PICO:\\>");
 }
 
 int main()
@@ -159,7 +152,7 @@ int main()
             refresh();
         }
         else if (k == 127 || k == 8)
-        {  // backspace
+        {
             if (!line.empty())
             {
                 line.pop_back();
@@ -175,7 +168,7 @@ int main()
             break;
         }
         else if (k >= 32 && k < 127)
-        {  // printable
+        {
             line.push_back((char) k);
             addch((char) k);
             refresh();
