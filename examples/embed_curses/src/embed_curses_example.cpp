@@ -271,6 +271,10 @@ int main()
             box(frame);
     };
 
+    // hide cursor
+    curs_set(0);
+    std::printf("\x1b[?25l");
+
     apply_frame_border(status_frame, status_height, cols, COLOR_PAIR(3));
     apply_frame_border(console_frame, middle_height, left_cols, COLOR_PAIR(1));
     apply_frame_border(history_frame, middle_height, right_cols, COLOR_PAIR(1));
