@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <algorithm>
 #include <pico/stdlib.h>
 #include <embed_curses/embed_curses.hpp>
 
@@ -85,32 +86,124 @@ public:
     }
 };
 
-// --- DOS emulator state ---
-static void execute_command(const std::string& cmd)
+static void draw_status(WINDOW* status, uint32_t uptime_s, size_t command_count, bool recalling)
 {
-    if (cmd == "help")
+    if (!status)
+        return;
+    int h = 0, w = 0;
+    getmaxyx(status, h, w);
+    const int row = (h > 1) ? 1 : 0;
+    const int col = (w > 1) ? 1 : 0;
+    wattrset(status, COLOR_PAIR(3) | A_BOLD);
+    wmove(status, row, col);
+    wclrtoeol(status);
+    wprintw(status,
+            "EmbedCurses demo  |  uptime %lus  |  commands %zu  |  history %s",
+            uptime_s,
+            command_count,
+            recalling ? "RECALL" : "LIVE");
+}
+
+static void render_history(WINDOW* win, const std::vector<std::string>& history)
+{
+    if (!win)
+        return;
+
+    int h = 0, w = 0;
+    getmaxyx(win, h, w);
+    if (h <= 0 || w <= 0)
+        return;
+
+    const int base_col   = (w > 1) ? 1 : 0;
+    const int header_row = (h > 1) ? 1 : 0;
+
+    wattrset(win, COLOR_PAIR(1) | A_BOLD);
+    wmove(win, header_row, base_col);
+    wclrtoeol(win);
+    waddstr(win, "Recent commands:");
+
+    const int content_row    = (header_row + 1 < h) ? header_row + 1 : header_row;
+    const int rows_available = (content_row < h) ? (h - content_row) : 0;
+    if (rows_available <= 0)
+        return;
+
+    wattrset(win, COLOR_PAIR(1));
+    const int start =
+        static_cast<int>((history.size() > static_cast<size_t>(rows_available)) ? history.size() - rows_available : 0);
+    for (int row = 0; row < rows_available; ++row)
     {
-        printw("Commands: HELP VER CLS\r\n");
-    }
-    else if (cmd == "ver")
-    {
-        printw("ecurses DOS [Version 0.1]\r\n");
-    }
-    else if (cmd == "cls")
-    {
-        clear();
-        refresh();
-    }
-    else if (!cmd.empty())
-    {
-        printw("Bad command or file name\r\n");
+        const int idx = start + row;
+        wmove(win, content_row + row, base_col);
+        wclrtoeol(win);
+        if (idx < static_cast<int>(history.size()))
+            waddstr(win, history[idx].c_str());
     }
 }
 
-static void prompt()
+static void render_input(WINDOW* input, const std::string& line)
 {
-    attrset(COLOR_PAIR(1));
-    printw("PICO:\\>");
+    if (!input)
+        return;
+    int h = 0, w = 0;
+    getmaxyx(input, h, w);
+    const int row = (h > 1) ? 1 : 0;
+    const int col = (w > 1) ? 1 : 0;
+    wattrset(input, COLOR_PAIR(1) | A_BOLD);
+    wmove(input, row, col);
+    wclrtoeol(input);
+    waddstr(input, "PICO:>");
+    wattrset(input, COLOR_PAIR(1));
+    if (!line.empty())
+        waddstr(input, line.c_str());
+}
+
+static void append_console_prompt(WINDOW* console, const std::string& line)
+{
+    if (!console)
+        return;
+    wattrset(console, COLOR_PAIR(1) | A_BOLD);
+    wprintw(console, "PICO:> %s\r\n", line.c_str());
+}
+
+static void clear_console(WINDOW* frame, WINDOW* console)
+{
+    if (!console)
+        return;
+    wattrset(console, COLOR_PAIR(1));
+    wclear(console);
+    if (frame && frame != console)
+    {
+        wattrset(frame, COLOR_PAIR(1));
+        wborder(frame);
+    }
+}
+
+static void run_command(WINDOW* console_frame, WINDOW* console, const std::string& cmd)
+{
+    if (!console || cmd.empty())
+        return;
+
+    if (cmd == "help")
+    {
+        wattrset(console, COLOR_PAIR(2));
+        wprintw(console, "Commands: HELP VER CLS\r\n");
+    }
+    else if (cmd == "ver")
+    {
+        wattrset(console, COLOR_PAIR(2));
+        wprintw(console, "ecurses DOS [Version 0.2]\r\n");
+    }
+    else if (cmd == "cls")
+    {
+        clear_console(console_frame, console);
+        wattrset(console, COLOR_PAIR(2));
+        wprintw(console, "Console cleared.\r\n");
+    }
+    else
+    {
+        wattrset(console, COLOR_PAIR(1));
+        wprintw(console, "Unknown command: %s\r\n", cmd.c_str());
+    }
 }
 
 int main()
@@ -120,60 +213,230 @@ int main()
         sleep_ms(100);
 
     DemoFont            font;
-    AnsiTerminalDisplay disp(240, 136, font.glyph_width(), font.glyph_height());
+    AnsiTerminalDisplay disp(480, 340, font.glyph_width(), font.glyph_height());
     StdioInput          input;
     Curses<>            screen(disp, input, font);
     set_active(screen);
 
     initscr();
-    init_pair(1, Color{255, 255, 255}, Color{0, 0, 0});
-    attrset(COLOR_PAIR(1));
-    clear();
-    prompt();
-    refresh();
-
-    std::string line;
     timeout(0);
 
-    while (true)
+    init_pair(1, Color{230, 230, 230}, Color{0, 0, 0});
+    init_pair(2, Color{0, 255, 180}, Color{0, 0, 0});
+    init_pair(3, Color{255, 255, 0}, Color{0, 0, 40});
+
+    const int cols = COLS();
+    const int rows = LINES();
+
+    const int status_height = std::min(3, rows);
+    const int input_height  = std::min(3, std::max(rows - status_height, 1));
+    const int middle_start  = status_height;
+    const int middle_height = std::max(rows - status_height - input_height, 1);
+
+    int left_cols  = std::max(cols / 2, 1);
+    int right_cols = std::max(cols - left_cols, 1);
+    if (left_cols + right_cols > cols)
+        right_cols = std::max(cols - left_cols, 1);
+
+    WINDOW* status_frame  = newwin(status_height, cols, 0, 0);
+    WINDOW* console_frame = newwin(middle_height, left_cols, middle_start, 0);
+    WINDOW* history_frame = newwin(middle_height, right_cols, middle_start, left_cols);
+    WINDOW* input_frame   = newwin(input_height, cols, middle_start + middle_height, 0);
+
+    if (!status_frame || !console_frame || !history_frame || !input_frame)
+        return 1;
+
+    auto apply_frame_border = [](WINDOW* frame, int height, int width, uint16_t attr_pair) {
+        if (!frame)
+            return;
+        wattrset(frame, attr_pair);
+        if (height > 1 && width > 1)
+            wborder(frame);
+    };
+
+    apply_frame_border(status_frame, status_height, cols, COLOR_PAIR(3));
+    apply_frame_border(console_frame, middle_height, left_cols, COLOR_PAIR(1));
+    apply_frame_border(history_frame, middle_height, right_cols, COLOR_PAIR(1));
+    apply_frame_border(input_frame, input_height, cols, COLOR_PAIR(1));
+
+    auto make_inner = [](WINDOW* frame, int height, int width) -> WINDOW* {
+        if (!frame)
+            return nullptr;
+        if (height > 2 && width > 2)
+            return derwin(frame, height - 2, width - 2, 1, 1);
+        return frame;
+    };
+
+    WINDOW* status_win  = make_inner(status_frame, status_height, cols);
+    WINDOW* console_win = make_inner(console_frame, middle_height, left_cols);
+    WINDOW* history_win = make_inner(history_frame, middle_height, right_cols);
+    WINDOW* input_win   = make_inner(input_frame, input_height, cols);
+
+    keypad(input_win, true);
+
+    wattrset(console_win, COLOR_PAIR(2));
+    wprintw(console_win, "EmbedCurses console ready. Type HELP for commands.\r\n");
+
+    std::vector<std::string> history = {"Type 'help' to list commands",
+                                        "Type 'ver' for a fake version",
+                                        "Type 'cls' to clear the console",
+                                        "Press 'q' to exit the demo"};
+
+    std::string              line;
+    size_t                   command_count = 0;
+    std::vector<std::string> command_log;
+    int                      recall_index = -1;
+
+    bool history_dirty = true;
+    bool input_dirty   = true;
+    bool status_dirty  = true;
+    bool console_dirty = true;
+    bool quitting      = false;
+
+    absolute_time_t next_status = make_timeout_time_ms(0);
+
+    while (!quitting)
     {
-        int k = getch();
-        if (k == KEY_NONE)
+        int  ch           = wgetch(input_win);
+        bool need_present = false;
+
+        if (ch != KEY_NONE)
         {
-            sleep_ms(16);
-            continue;
-        }
-        if (k == '\r' || k == '\n')
-        {
-            printw("\r\n");
-            execute_command(line);
-            line.clear();
-            prompt();
-            refresh();
-        }
-        else if (k == 127 || k == 8)
-        {
-            if (!line.empty())
+            if (ch == '\r' || ch == '\n' || ch == KEY_ENTER)
             {
-                line.pop_back();
-                int y, x;
-                getyx(y, x);
-                mvaddch(y, x - 1, ' ');
-                move(y, x - 1);
-                refresh();
+                append_console_prompt(console_win, line);
+                console_dirty = true;
+
+                if (!line.empty())
+                {
+                    history.emplace_back("> " + line);
+                    if (history.size() > 32)
+                        history.erase(history.begin(), history.end() - 32);
+                    history_dirty = true;
+                    ++command_count;
+                    command_log.push_back(line);
+                }
+
+                run_command(console_frame, console_win, line);
+                console_dirty = true;
+
+                line.clear();
+                input_dirty  = true;
+                status_dirty = true;
+                recall_index = -1;
+            }
+            else if (ch == 127 || ch == 8 || ch == KEY_BACKSPACE)
+            {
+                if (!line.empty())
+                {
+                    line.pop_back();
+                    input_dirty  = true;
+                    status_dirty = true;
+                }
+            }
+            else if (ch == KEY_UP)
+            {
+                if (!command_log.empty())
+                {
+                    if (recall_index < 0)
+                        recall_index = static_cast<int>(command_log.size()) - 1;
+                    else if (recall_index > 0)
+                        --recall_index;
+                    line         = command_log[recall_index];
+                    input_dirty  = true;
+                    status_dirty = true;
+                }
+            }
+            else if (ch == KEY_DOWN)
+            {
+                if (!command_log.empty() && recall_index >= 0)
+                {
+                    if (recall_index < static_cast<int>(command_log.size()) - 1)
+                    {
+                        ++recall_index;
+                        line = command_log[recall_index];
+                    }
+                    else
+                    {
+                        recall_index = -1;
+                        line.clear();
+                    }
+                    input_dirty  = true;
+                    status_dirty = true;
+                }
+            }
+            else if (ch == 'q' || ch == 'Q')
+            {
+                history.emplace_back("> quit");
+                history_dirty = true;
+                wattrset(console_win, COLOR_PAIR(1));
+                wprintw(console_win, "Exiting demo...\r\n");
+                console_dirty = true;
+                quitting      = true;
+            }
+            else if (ch >= 32 && ch < 127)
+            {
+                line.push_back(static_cast<char>(ch));
+                input_dirty  = true;
+                status_dirty = true;
+                recall_index = -1;
             }
         }
-        else if (k == 'q')
+
+        absolute_time_t now = get_absolute_time();
+        if (status_dirty || absolute_time_diff_us(now, next_status) <= 0)
         {
-            break;
+            draw_status(status_win, to_ms_since_boot(now) / 1000, command_count, recall_index >= 0);
+            status_dirty = false;
+            next_status  = make_timeout_time_ms(250);
+            need_present = true;
         }
-        else if (k >= 32 && k < 127)
+
+        if (history_dirty)
         {
-            line.push_back((char) k);
-            addch((char) k);
-            refresh();
+            render_history(history_win, history);
+            history_dirty = false;
+            need_present  = true;
+        }
+
+        if (input_dirty)
+        {
+            render_input(input_win, line);
+            input_dirty  = false;
+            need_present = true;
+        }
+
+        if (console_dirty)
+        {
+            console_dirty = false;
+            need_present  = true;
+        }
+
+        if (need_present)
+        {
+            wrefresh(input_win);
+        }
+        else
+        {
+            sleep_ms(16);
         }
     }
+
+    wrefresh(input_win);
+
+    if (input_win && input_win != input_frame)
+        delwin(input_win);
+    if (history_win && history_win != history_frame)
+        delwin(history_win);
+    if (console_win && console_win != console_frame)
+        delwin(console_win);
+    if (status_win && status_win != status_frame)
+        delwin(status_win);
+
+    delwin(input_frame);
+    delwin(history_frame);
+    delwin(console_frame);
+    delwin(status_frame);
 
     endwin();
     return 0;
