@@ -46,21 +46,28 @@ public:
     {
         if (_first)
         {
-            std::printf("\x1b[2J\x1b[H");
+            std::printf("\x1b[2J");
             _first = false;
-        }
-        else
-        {
-            std::printf("\x1b[H");
         }
         for (int r = 0; r < _rows; ++r)
         {
+            std::printf("\x1b[%d;1H", r + 1);
             for (int c = 0; c < _cols; ++c)
                 std::putchar(_grid[r * _cols + c].ch);
-            std::putchar('\n');
+            std::printf("\x1b[K");
         }
-        std::printf("\x1b[H");
+        std::printf("\x1b[%d;1H\x1b[J", _rows + 1);
         std::fflush(stdout);
+    }
+
+    void resize_chars(int cols, int rows)
+    {
+        _cols = std::max(1, cols);
+        _rows = std::max(1, rows);
+        _wpx  = _cols * _gw;
+        _hpx  = _rows * _gh;
+        _grid.assign(_rows * _cols, Cell{' ', {255, 255, 255}, {0, 0, 0}, false, false});
+        _first = true;
     }
 
 private:
@@ -102,6 +109,36 @@ static void draw_status(WINDOW* status, uint32_t uptime_s, size_t command_count,
             uptime_s,
             command_count,
             recalling ? "RECALL" : "LIVE");
+}
+
+static void render_console(WINDOW* win, const std::vector<std::string>& lines)
+{
+    if (!win)
+        return;
+    int h = 0, w = 0;
+    getmaxyx(win, h, w);
+    if (h <= 0 || w <= 0)
+        return;
+    const int start = (lines.size() > static_cast<size_t>(h)) ? (lines.size() - h) : 0;
+    for (int row = 0; row < h; ++row)
+    {
+        const int idx = start + row;
+        wmove(win, row, 0);
+        wclrtoeol(win);
+        if (idx < static_cast<int>(lines.size()))
+        {
+            const std::string& line = lines[idx];
+            if (static_cast<int>(line.size()) > w)
+            {
+                std::string truncated(line.begin(), line.begin() + w);
+                waddstr(win, truncated.c_str());
+            }
+            else
+            {
+                waddstr(win, line.c_str());
+            }
+        }
+    }
 }
 
 static void render_history(WINDOW* win, const std::vector<std::string>& history)
@@ -174,20 +211,23 @@ static void render_input(WINDOW* input, const std::string& line)
     }
 }
 
-static void append_console_prompt(WINDOW* console, const std::string& line)
+static void append_console_prompt(WINDOW* console, std::vector<std::string>& buffer, const std::string& line)
 {
     if (!console)
         return;
+    std::string formatted = "PICO:> " + line;
+    buffer.push_back(formatted);
     wattrset(console, COLOR_PAIR(1) | A_BOLD);
-    wprintw(console, "PICO:> %s\r\n", line.c_str());
+    wprintw(console, "%s\r\n", formatted.c_str());
 }
 
-static void clear_console(WINDOW* frame, WINDOW* console)
+static void clear_console(WINDOW* frame, WINDOW* console, std::vector<std::string>& buffer)
 {
     if (!console)
         return;
     wattrset(console, COLOR_PAIR(1));
     wclear(console);
+    buffer.clear();
     if (frame && frame != console)
     {
         wattrset(frame, COLOR_PAIR(1));
@@ -195,7 +235,10 @@ static void clear_console(WINDOW* frame, WINDOW* console)
     }
 }
 
-static void run_command(WINDOW* console_frame, WINDOW* console, const std::string& cmd)
+static void run_command(WINDOW* console_frame,
+                        WINDOW* console,
+                        std::vector<std::string>& buffer,
+                        const std::string&        cmd)
 {
     if (!console || cmd.empty())
         return;
@@ -203,22 +246,26 @@ static void run_command(WINDOW* console_frame, WINDOW* console, const std::strin
     if (cmd == "help")
     {
         wattrset(console, COLOR_PAIR(2));
+        buffer.emplace_back("Commands: HELP VER CLS");
         wprintw(console, "Commands: HELP VER CLS\r\n");
     }
     else if (cmd == "ver")
     {
         wattrset(console, COLOR_PAIR(2));
+        buffer.emplace_back("ecurses DOS [Version 0.2]");
         wprintw(console, "ecurses DOS [Version 0.2]\r\n");
     }
     else if (cmd == "cls")
     {
-        clear_console(console_frame, console);
+        clear_console(console_frame, console, buffer);
         wattrset(console, COLOR_PAIR(2));
+        buffer.emplace_back("Console cleared.");
         wprintw(console, "Console cleared.\r\n");
     }
     else
     {
         wattrset(console, COLOR_PAIR(1));
+        buffer.emplace_back("Unknown command: " + cmd);
         wprintw(console, "Unknown command: %s\r\n", cmd.c_str());
     }
 }
@@ -229,8 +276,14 @@ int main()
     while (!stdio_usb_connected())
         sleep_ms(100);
 
+    constexpr int SCREEN_MAX_COLS = 240;
+    constexpr int SCREEN_MAX_ROWS = 120;
+
     DemoFont            font;
-    AnsiTerminalDisplay disp(480, 340, font.glyph_width(), font.glyph_height());
+    AnsiTerminalDisplay disp(SCREEN_MAX_COLS * font.glyph_width(),
+                             SCREEN_MAX_ROWS * font.glyph_height(),
+                             font.glyph_width(),
+                             font.glyph_height());
     StdioInput          input;
     Curses<>            screen(disp, input, font);
     set_active(screen);
@@ -242,22 +295,22 @@ int main()
     init_pair(2, Color{0, 255, 180}, Color{0, 0, 0});
     init_pair(3, Color{255, 255, 0}, Color{0, 0, 40});
 
-    const int cols = COLS();
-    const int rows = LINES();
+    int cols = COLS();
+    int rows = LINES();
 
-    const int status_height = std::min(3, rows);
-    const int input_height  = std::min(3, std::max(rows - status_height, 1));
-    const int middle_start  = status_height;
-    const int middle_height = std::max(rows - status_height - input_height, 1);
+    int status_height = std::min(3, rows);
+    int input_height  = std::min(3, std::max(rows - status_height, 1));
+    int middle_start  = status_height;
+    int middle_height = std::max(rows - status_height - input_height, 1);
 
-    int left_cols  = std::max(cols / 2, 1);
-    int right_cols = std::max(cols - left_cols, 1);
-    if (left_cols + right_cols > cols)
-        right_cols = std::max(cols - left_cols, 1);
+    int console_cols = std::max(cols / 2, 1);
+    int history_cols = std::max(cols - console_cols, 1);
+    if (console_cols + history_cols > cols)
+        history_cols = std::max(cols - console_cols, 1);
 
     WINDOW* status_frame  = newwin(status_height, cols, 0, 0);
-    WINDOW* console_frame = newwin(middle_height, left_cols, middle_start, 0);
-    WINDOW* history_frame = newwin(middle_height, right_cols, middle_start, left_cols);
+    WINDOW* console_frame = newwin(middle_height, console_cols, middle_start, 0);
+    WINDOW* history_frame = newwin(middle_height, history_cols, middle_start, console_cols);
     WINDOW* input_frame   = newwin(input_height, cols, middle_start + middle_height, 0);
 
     if (!status_frame || !console_frame || !history_frame || !input_frame)
@@ -270,49 +323,130 @@ int main()
         if (height > 1 && width > 1)
             box(frame);
     };
-
-    // hide cursor
-    curs_set(0);
-    std::printf("\x1b[?25l");
-
-    apply_frame_border(status_frame, status_height, cols, COLOR_PAIR(3));
-    apply_frame_border(console_frame, middle_height, left_cols, COLOR_PAIR(1));
-    apply_frame_border(history_frame, middle_height, right_cols, COLOR_PAIR(1));
-    apply_frame_border(input_frame, input_height, cols, COLOR_PAIR(1));
-
-    auto make_inner = [](WINDOW* frame, int height, int width) -> WINDOW* {
-        if (!frame)
-            return nullptr;
-        if (height > 2 && width > 2)
-            return derwin(frame, height - 2, width - 2, 1, 1);
-        return frame;
-    };
-
-    WINDOW* status_win  = make_inner(status_frame, status_height, cols);
-    WINDOW* console_win = make_inner(console_frame, middle_height, left_cols);
-    WINDOW* history_win = make_inner(history_frame, middle_height, right_cols);
-    WINDOW* input_win   = make_inner(input_frame, input_height, cols);
-
-    keypad(input_win, true);
-
-    wattrset(console_win, COLOR_PAIR(2));
-    wprintw(console_win, "EmbedCurses console ready. Type HELP for commands.\r\n");
-
-    std::vector<std::string> history = {"Type 'help' to list commands",
-                                        "Type 'ver' for a fake version",
-                                        "Type 'cls' to clear the console",
-                                        "Press 'q' to exit the demo"};
-
-    std::string              line;
-    size_t                   command_count = 0;
-    std::vector<std::string> command_log;
-    int                      recall_index = -1;
+    WINDOW* status_win  = nullptr;
+    WINDOW* console_win = nullptr;
+    WINDOW* history_win = nullptr;
+    WINDOW* input_win   = nullptr;
 
     bool history_dirty = true;
     bool input_dirty   = true;
     bool status_dirty  = true;
     bool console_dirty = true;
-    bool quitting      = false;
+
+    constexpr int MIN_PANEL_COLS  = 10;
+    constexpr int MIN_SCREEN_COLS = MIN_PANEL_COLS * 2;
+    constexpr int MIN_SCREEN_ROWS = 5;
+    const int     KEYMOD_MASK    = KEYMOD_SHIFT | KEYMOD_ALT | KEYMOD_CTRL;
+
+    auto reconfigure_inner = [&](WINDOW*& inner, WINDOW* frame, int height, int width, uint16_t attr_pair) {
+        if (!frame)
+        {
+            inner = nullptr;
+            return;
+        }
+        if (inner && inner != frame)
+            delwin(inner);
+        if (height > 2 && width > 2)
+            inner = derwin(frame, height - 2, width - 2, 1, 1);
+        else
+            inner = frame;
+        if (inner)
+        {
+            wattrset(inner, attr_pair);
+            werase(inner);
+        }
+    };
+
+    auto apply_layout = [&](int desired_console_cols) {
+        cols = COLS();
+        rows = LINES();
+
+        status_height = std::clamp(status_height, 1, std::max(1, rows - 2));
+        input_height  = std::clamp(input_height, 1, std::max(1, rows - status_height - 1));
+        middle_start  = status_height;
+        middle_height = std::max(rows - status_height - input_height, 1);
+
+        console_cols = std::clamp(desired_console_cols, MIN_PANEL_COLS, std::max(MIN_PANEL_COLS, cols - MIN_PANEL_COLS));
+        history_cols = std::max(cols - console_cols, MIN_PANEL_COLS);
+        if (console_cols + history_cols > cols)
+        {
+            history_cols = std::max(MIN_PANEL_COLS, cols / 2);
+            console_cols = cols - history_cols;
+        }
+
+        screen.clear();
+
+        wresize(status_frame, status_height, cols);
+        mvwin(status_frame, 0, 0);
+        wresize(console_frame, middle_height, console_cols);
+        mvwin(console_frame, middle_start, 0);
+        wresize(history_frame, middle_height, history_cols);
+        mvwin(history_frame, middle_start, console_cols);
+        wresize(input_frame, input_height, cols);
+        mvwin(input_frame, middle_start + middle_height, 0);
+
+        apply_frame_border(status_frame, status_height, cols, COLOR_PAIR(3));
+        apply_frame_border(console_frame, middle_height, console_cols, COLOR_PAIR(1));
+        apply_frame_border(history_frame, middle_height, history_cols, COLOR_PAIR(1));
+        apply_frame_border(input_frame, input_height, cols, COLOR_PAIR(1));
+
+        reconfigure_inner(status_win, status_frame, status_height, cols, COLOR_PAIR(3));
+        reconfigure_inner(console_win, console_frame, middle_height, console_cols, COLOR_PAIR(2));
+        reconfigure_inner(history_win, history_frame, middle_height, history_cols, COLOR_PAIR(1));
+        reconfigure_inner(input_win, input_frame, input_height, cols, COLOR_PAIR(1));
+
+        if (input_win)
+            keypad(input_win, true);
+
+        touchwin(status_frame);
+        touchwin(console_frame);
+        touchwin(history_frame);
+        touchwin(input_frame);
+
+        history_dirty = true;
+        input_dirty   = true;
+        status_dirty  = true;
+        console_dirty = true;
+    };
+
+    auto apply_screen_resize = [&](int desired_rows, int desired_cols) {
+        int target_rows = std::min(std::max(desired_rows, std::max(status_height + input_height + 1, MIN_SCREEN_ROWS)),
+                                   SCREEN_MAX_ROWS);
+        int target_cols = std::min(std::max(desired_cols, MIN_SCREEN_COLS), SCREEN_MAX_COLS);
+
+        screen.resizeterm(target_rows, target_cols);
+        disp.resize_chars(target_cols, target_rows);
+
+        cols = COLS();
+        rows = LINES();
+
+        status_height = std::clamp(status_height, 1, std::max(1, rows - 2));
+        input_height  = std::clamp(input_height, 1, std::max(1, rows - status_height - 1));
+        middle_start  = status_height;
+        middle_height = std::max(rows - status_height - input_height, 1);
+
+        console_cols = std::clamp(console_cols, MIN_PANEL_COLS, std::max(MIN_PANEL_COLS, cols - MIN_PANEL_COLS));
+        history_cols = cols - console_cols;
+
+        apply_layout(console_cols);
+    };
+
+    apply_screen_resize(rows, cols);
+
+    std::vector<std::string> history = {"Type 'help' to list commands",
+                                        "Type 'ver' for a fake version",
+                                        "Type 'cls' to clear the console",
+                                        "Ctrl+Left/Right resize console/history",
+                                        "Press 'q' to exit the demo"};
+    std::vector<std::string> console_lines;
+    console_lines.emplace_back("EmbedCurses console ready. Type HELP for commands.");
+    console_dirty = true;
+
+    std::string              line;
+    size_t                   command_count = 0;
+    std::vector<std::string> command_log;
+    int                      recall_index = -1;
+    bool                     quitting      = false;
 
     absolute_time_t next_status = make_timeout_time_ms(0);
 
@@ -323,9 +457,52 @@ int main()
 
         if (ch != KEY_NONE)
         {
-            if (ch == '\r' || ch == '\n' || ch == KEY_ENTER)
+            if (ch == KEY_RESIZE)
             {
-                append_console_prompt(console_win, line);
+                int new_rows = rows;
+                int new_cols = cols;
+                if (screen.consume_resize(new_rows, new_cols))
+                {
+                    apply_screen_resize(new_rows, new_cols);
+                    need_present = true;
+                }
+                continue;
+            }
+
+            int modifiers = ch & KEYMOD_MASK;
+            int key       = ch & ~KEYMOD_MASK;
+
+            if (modifiers & KEYMOD_CTRL)
+            {
+                if (key == KEY_LEFT && console_cols > MIN_PANEL_COLS)
+                {
+                    apply_layout(console_cols - 2);
+                    need_present = true;
+                    continue;
+                }
+                if (key == KEY_RIGHT && history_cols > MIN_PANEL_COLS)
+                {
+                    apply_layout(console_cols + 2);
+                    need_present = true;
+                    continue;
+                }
+                if (key == KEY_UP)
+                {
+                    apply_screen_resize(rows + 1, cols);
+                    need_present = true;
+                    continue;
+                }
+                if (key == KEY_DOWN)
+                {
+                    apply_screen_resize(rows - 1, cols);
+                    need_present = true;
+                    continue;
+                }
+            }
+
+            if (key == '\r' || key == '\n' || key == KEY_ENTER)
+            {
+                append_console_prompt(console_win, console_lines, line);
                 console_dirty = true;
 
                 if (!line.empty())
@@ -338,7 +515,7 @@ int main()
                     command_log.push_back(line);
                 }
 
-                run_command(console_frame, console_win, line);
+                run_command(console_frame, console_win, console_lines, line);
                 console_dirty = true;
 
                 line.clear();
@@ -346,7 +523,7 @@ int main()
                 status_dirty = true;
                 recall_index = -1;
             }
-            else if (ch == 127 || ch == 8 || ch == KEY_BACKSPACE)
+            else if (key == 127 || key == 8 || key == KEY_BACKSPACE)
             {
                 if (!line.empty())
                 {
@@ -355,7 +532,7 @@ int main()
                     status_dirty = true;
                 }
             }
-            else if (ch == KEY_UP)
+            else if (key == KEY_UP)
             {
                 if (!command_log.empty())
                 {
@@ -368,7 +545,7 @@ int main()
                     status_dirty = true;
                 }
             }
-            else if (ch == KEY_DOWN)
+            else if (key == KEY_DOWN)
             {
                 if (!command_log.empty() && recall_index >= 0)
                 {
@@ -386,18 +563,19 @@ int main()
                     status_dirty = true;
                 }
             }
-            else if (ch == 'q' || ch == 'Q')
+            else if (key == 'q' || key == 'Q')
             {
                 history.emplace_back("> quit");
                 history_dirty = true;
+                console_lines.emplace_back("Exiting demo...");
                 wattrset(console_win, COLOR_PAIR(1));
                 wprintw(console_win, "Exiting demo...\r\n");
                 console_dirty = true;
                 quitting      = true;
             }
-            else if (ch >= 32 && ch < 127)
+            else if (key >= 32 && key < 127)
             {
-                line.push_back(static_cast<char>(ch));
+                line.push_back(static_cast<char>(key));
                 input_dirty  = true;
                 status_dirty = true;
                 recall_index = -1;
@@ -429,6 +607,7 @@ int main()
 
         if (console_dirty)
         {
+            render_console(console_win, console_lines);
             console_dirty = false;
             need_present  = true;
         }
