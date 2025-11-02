@@ -26,7 +26,7 @@ namespace jsi
  * - Read operations require a STOP condition between write and read phases (repeated START)
  * - Devices may not respond with ACK, and this is normal behavior
  *
- * The provided WriteFunc and ReadFunc callbacks must adhere to SCCB semantics:
+ * The provided I2CWriteFunction and I2CReadFunction callbacks must adhere to SCCB semantics:
  * they should ignore ACK/NACK responses and return false only for actual bus errors
  * (e.g., bus faults, timeouts, hardware failures), not for missing ACKs.
  */
@@ -43,10 +43,9 @@ public:
      * @param device_addr The 7-bit device address
      * @param data Pointer to data buffer to write
      * @param len Number of bytes to write
-     * @param nostop If true, do not send STOP condition after write (for repeated START)
      * @return true if write succeeded (ignoring ACK/NACK), false on bus error
      */
-    using WriteFunc = std::function<bool(uint8_t device_addr, const uint8_t* data, size_t len, bool nostop)>;
+    using I2CWriteFunction = std::function<bool(uint8_t device_addr, const uint8_t* data, size_t len)>;
 
     /**
      * @brief Read data from the SCCB bus.
@@ -60,7 +59,7 @@ public:
      * @param len Number of bytes to read
      * @return true if read succeeded (ignoring ACK/NACK), false on bus error
      */
-    using ReadFunc = std::function<bool(uint8_t device_addr, uint8_t* data, size_t len)>;
+    using I2CReadFunction = std::function<bool(uint8_t device_addr, uint8_t* data, size_t len)>;
 
     /**
      * @brief Construct an SCCB interface using externally managed bus callbacks.
@@ -68,7 +67,7 @@ public:
      * The application is responsible for initializing and deinitializing the
      * underlying hardware before interacting with this class.
      */
-    SCCB(WriteFunc write_func, ReadFunc read_func);
+    SCCB(I2CWriteFunction write_func, I2CReadFunction read_func);
     ~SCCB() = default;
 
     bool writeRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t value);
@@ -78,8 +77,8 @@ public:
     bool readRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t* data, size_t len);
 
 private:
-    WriteFunc write_func_;
-    ReadFunc  read_func_;
+    I2CWriteFunction write_func_;
+    I2CReadFunction  read_func_;
 };
 
 }  // namespace jsi

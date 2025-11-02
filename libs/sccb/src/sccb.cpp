@@ -14,7 +14,7 @@
 namespace jsi
 {
 
-SCCB::SCCB(WriteFunc write_func, ReadFunc read_func) :
+SCCB::SCCB(I2CWriteFunction write_func, I2CReadFunction read_func) :
     write_func_(std::move(write_func)), read_func_(std::move(read_func))
 {}
 
@@ -31,7 +31,7 @@ bool SCCB::writeRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t value)
         value,
     };
 
-    return write_func_(device_addr, buffer, 3, false);
+    return write_func_(device_addr, buffer, 3);
 }
 
 bool SCCB::writeRegister(uint8_t device_addr, uint16_t reg_addr, const uint8_t* data, size_t len)
@@ -50,7 +50,7 @@ bool SCCB::writeRegister(uint8_t device_addr, uint16_t reg_addr, const uint8_t* 
         buffer[index + 2U] = data[index];
     }
 
-    return write_func_(device_addr, buffer.data(), buffer.size(), false);
+    return write_func_(device_addr, buffer.data(), buffer.size());
 }
 
 bool SCCB::readRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t& value)
@@ -65,7 +65,7 @@ bool SCCB::readRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t& value)
         static_cast<uint8_t>(reg_addr & 0xFFU),
     };
 
-    if (!write_func_(device_addr, buffer, 2, false))
+    if (!write_func_(device_addr, buffer, 2))
     {
         return false;
     }
@@ -85,7 +85,7 @@ bool SCCB::readRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t* data, s
         static_cast<uint8_t>(reg_addr & 0xFFU),
     };
 
-    if (!write_func_(device_addr, buffer, 2, false))
+    if (!write_func_(device_addr, buffer, 2))
     {
         return false;
     }

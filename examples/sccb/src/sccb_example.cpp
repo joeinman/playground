@@ -54,14 +54,14 @@ bool initI2C()
     return true;
 }
 
-bool writeI2C(uint8_t device_addr, const uint8_t* data, size_t len, bool nostop)
+bool writeI2C(uint8_t device_addr, const uint8_t* data, size_t len)
 {
     if (data == nullptr || len == 0)
     {
         return false;
     }
 
-    const int result = i2c_write_timeout_us(i2c0, device_addr, data, len, nostop, I2CTimeoutUS);
+    const int result = i2c_write_timeout_us(i2c0, device_addr, data, len, false, I2CTimeoutUS);
     return result >= 0 && static_cast<size_t>(result) == len;
 }
 
