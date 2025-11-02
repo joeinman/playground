@@ -1,0 +1,17 @@
+# SCCB
+
+OV5640 GND to Pi Pico GND
+OV5640 3V to Pi Pico 3V3
+
+OV5640 SDA to Pi Pico GP8
+OV5640 SCL to Pi Pico GP9
+
+OV5640 HS to Pi Pico GP3
+OV5640 VS to Pi Pico GP4
+
+OV5640 XC to Pi Pico GP5
+OV5640 PC to Pi Pico GP6
+
+OV5640 D2..D9 to Pi Pico GP11..GP18
+
+OV5640 RT to Pi Pico GP7
