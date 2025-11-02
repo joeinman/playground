@@ -43,7 +43,7 @@ void initCameraClock()
     sleep_ms(5);
 }
 
-bool initI2C()
+void initI2C()
 {
     i2c_init(i2c0, I2CFrequencyHz);
     gpio_set_function(I2CSDAPin, GPIO_FUNC_I2C);
@@ -51,7 +51,6 @@ bool initI2C()
     gpio_pull_up(I2CSDAPin);
     gpio_pull_up(I2CSCLPin);
     sleep_ms(10);
-    return true;
 }
 
 bool writeI2C(uint8_t device_addr, const uint8_t* data, size_t len)
@@ -76,11 +75,6 @@ bool readI2C(uint8_t device_addr, uint8_t* data, size_t len)
     return result >= 0 && static_cast<size_t>(result) == len;
 }
 
-void deinitI2C()
-{
-    i2c_deinit(i2c0);
-}
-
 void scanSccbBus()
 {
     printf("Scanning SCCB/I2C bus...\n");
@@ -101,16 +95,7 @@ int main()
     printf("OV5640 SCCB example starting...\n");
 
     initCameraClock();
-
-    if (!initI2C())
-    {
-        printf("Failed to initialize SCCB/I2C interface.\n");
-        deinitI2C();
-        while (true)
-        {
-            tight_loop_contents();
-        }
-    }
+    initI2C();
 
     jsi::SCCB camera_bus(writeI2C, readI2C);
 
@@ -133,7 +118,6 @@ int main()
     if (!camera_found)
     {
         printf("Failed to read OV5640 identification registers on 0x3C/0x3D.\n");
-        deinitI2C();
         while (true)
         {
             tight_loop_contents();
@@ -160,8 +144,6 @@ int main()
     {
         printf("Failed to read system control register.\n");
     }
-
-    deinitI2C();
 
     while (true)
     {
