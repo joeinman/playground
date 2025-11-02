@@ -108,7 +108,7 @@ int main()
         deinitI2C();
         while (true)
         {
-            sleep_ms(1000);
+            tight_loop_contents();
         }
     }
 
@@ -133,11 +133,10 @@ int main()
     if (!camera_found)
     {
         printf("Failed to read OV5640 identification registers on 0x3C/0x3D.\n");
-        printf("Verify wiring, power rails, and the RESET/PWDN control lines.\n");
         deinitI2C();
         while (true)
         {
-            sleep_ms(1000);
+            tight_loop_contents();
         }
     }
 
@@ -166,6 +165,6 @@ int main()
 
     while (true)
     {
-        sleep_ms(1000);
+        tight_loop_contents();
     }
 }
