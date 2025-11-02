@@ -14,9 +14,9 @@ constexpr uint8_t  I2CSDAPin      = 8;
 constexpr uint8_t  I2CSCLPin      = 9;
 constexpr uint32_t I2CTimeoutUS   = 1'000;
 
-constexpr uint     XclkPin         = 5;
-constexpr uint32_t XclkFrequencyHz = 24'000'000;
-constexpr uint16_t XclkWrap        = 1;
+constexpr uint     XCLKPin         = 5;
+constexpr uint32_t XCLKFrequencyHz = 24'000'000;
+constexpr uint16_t XCLKWrap        = 1;
 
 constexpr uint16_t OV5640ChipIDRegister  = 0x300A;
 constexpr uint16_t OV5640SYSCTRLRegister = 0x3008;
@@ -25,20 +25,20 @@ constexpr std::array<uint8_t, 2> Ov5640CandidateAddresses = {0x3C, 0x3D};
 
 void initCameraClock()
 {
-    const uint slice = pwm_gpio_to_slice_num(XclkPin);
+    const uint slice = pwm_gpio_to_slice_num(XCLKPin);
 
-    gpio_set_function(XclkPin, GPIO_FUNC_PWM);
+    gpio_set_function(XCLKPin, GPIO_FUNC_PWM);
 
     pwm_config  config  = pwm_get_default_config();
     const float clk_div = static_cast<float>(clock_get_hz(clk_sys)) /
-                          (static_cast<float>(XclkFrequencyHz) * static_cast<float>(XclkWrap + 1));
+                          (static_cast<float>(XCLKFrequencyHz) * static_cast<float>(XCLKWrap + 1));
 
     pwm_config_set_clkdiv(&config, clk_div);
-    pwm_config_set_wrap(&config, XclkWrap);
+    pwm_config_set_wrap(&config, XCLKWrap);
     pwm_init(slice, &config, false);
 
-    const uint16_t duty_level = (XclkWrap + 1) / 2;
-    pwm_set_gpio_level(XclkPin, duty_level);
+    const uint16_t duty_level = (XCLKWrap + 1) / 2;
+    pwm_set_gpio_level(XCLKPin, duty_level);
     pwm_set_enabled(slice, true);
     sleep_ms(5);
 }
@@ -98,7 +98,6 @@ int main()
 {
     stdio_init_all();
     sleep_ms(2000);
-
     printf("OV5640 SCCB example starting...\n");
 
     initCameraClock();
