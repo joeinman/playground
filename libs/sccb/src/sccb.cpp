@@ -9,41 +9,18 @@
  */
 
 #include "sccb/sccb.hpp"
+#include <utility>
 
 namespace jsi
 {
 
-SCCB::SCCB(InitFunc init_func, WriteFunc write_func, ReadFunc read_func, DeinitFunc deinit_func) :
-    init_func_(init_func),
-    write_func_(write_func),
-    read_func_(read_func),
-    deinit_func_(deinit_func),
-    initialized_(false)
-{
-    if (init_func_)
-    {
-        initialized_ = init_func_();
-    }
-    else
-    {
-        // If no init function provided, assume bus is already initialized externally
-        initialized_ = true;
-    }
-}
-
-SCCB::~SCCB()
-{
-    // Only deinitialize if we successfully initialized (and a deinit function was provided)
-    // Skip deinit if SCCB did not perform initialization (e.g., externally initialized bus)
-    if (deinit_func_ && initialized_ && init_func_)
-    {
-        deinit_func_();
-    }
-}
+SCCB::SCCB(WriteFunc write_func, ReadFunc read_func) :
+    write_func_(std::move(write_func)), read_func_(std::move(read_func))
+{}
 
 bool SCCB::writeRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t value)
 {
-    if (!initialized_ || !write_func_)
+    if (!write_func_)
     {
         return false;
     }
@@ -59,7 +36,7 @@ bool SCCB::writeRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t value)
 
 bool SCCB::writeRegister(uint8_t device_addr, uint16_t reg_addr, const uint8_t* data, size_t len)
 {
-    if (!initialized_ || !write_func_ || data == nullptr || len == 0)
+    if (!write_func_ || data == nullptr || len == 0)
     {
         return false;
     }
@@ -78,7 +55,7 @@ bool SCCB::writeRegister(uint8_t device_addr, uint16_t reg_addr, const uint8_t* 
 
 bool SCCB::readRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t& value)
 {
-    if (!initialized_ || !write_func_ || !read_func_)
+    if (!write_func_ || !read_func_)
     {
         return false;
     }
@@ -98,7 +75,7 @@ bool SCCB::readRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t& value)
 
 bool SCCB::readRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t* data, size_t len)
 {
-    if (!initialized_ || !write_func_ || !read_func_ || data == nullptr || len == 0)
+    if (!write_func_ || !read_func_ || data == nullptr || len == 0)
     {
         return false;
     }
@@ -115,10 +92,4 @@ bool SCCB::readRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t* data, s
 
     return read_func_(device_addr, data, len);
 }
-
-bool SCCB::isInitialized() const noexcept
-{
-    return initialized_;
-}
-
 }  // namespace jsi

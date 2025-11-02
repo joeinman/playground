@@ -34,12 +34,6 @@ class SCCB
 {
 public:
     /**
-     * @brief Initialize the SCCB bus.
-     * @return true if initialization succeeded, false otherwise.
-     */
-    using InitFunc = std::function<bool()>;
-
-    /**
      * @brief Write data to the SCCB bus.
      *
      * SCCB semantics: This function must ignore ACK/NACK responses from the device.
@@ -69,12 +63,13 @@ public:
     using ReadFunc = std::function<bool(uint8_t device_addr, uint8_t* data, size_t len)>;
 
     /**
-     * @brief Deinitialize the SCCB bus.
+     * @brief Construct an SCCB interface using externally managed bus callbacks.
+     *
+     * The application is responsible for initializing and deinitializing the
+     * underlying hardware before interacting with this class.
      */
-    using DeinitFunc = std::function<void()>;
-
-    SCCB(InitFunc init_func, WriteFunc write_func, ReadFunc read_func, DeinitFunc deinit_func = nullptr);
-    ~SCCB();
+    SCCB(WriteFunc write_func, ReadFunc read_func);
+    ~SCCB() = default;
 
     bool writeRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t value);
     bool writeRegister(uint8_t device_addr, uint16_t reg_addr, const uint8_t* data, size_t len);
@@ -82,15 +77,9 @@ public:
     bool readRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t& value);
     bool readRegister(uint8_t device_addr, uint16_t reg_addr, uint8_t* data, size_t len);
 
-    bool isInitialized() const noexcept;
-
 private:
-    InitFunc   init_func_;
-    WriteFunc  write_func_;
-    ReadFunc   read_func_;
-    DeinitFunc deinit_func_;
-
-    bool initialized_;
+    WriteFunc write_func_;
+    ReadFunc  read_func_;
 };
 
 }  // namespace jsi
