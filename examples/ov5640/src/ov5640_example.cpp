@@ -345,31 +345,125 @@ int main()
     printf("  Width:  %u pixels\n", camera.getWidth());
     printf("  Height: %u pixels\n", camera.getHeight());
     printf("  Size:   %zu bytes\n", buffer.size());
-    printf("\n");
-
-    // Print first 64 bytes as hex dump
-    printf("First 64 bytes of frame data:\n");
-    for (size_t i = 0; i < 64 && i < buffer.size(); i++)
-    {
-        if (i % 16 == 0)
-        {
-            printf("%04zx: ", i);
-        }
+    
+    // Check if buffer has any non-zero data
+    int non_zero_count = 0;
+    uint32_t sum = 0;
+    for (size_t i = 0; i < buffer.size(); i++) {
+        if (buffer[i] != 0) non_zero_count++;
+        sum += buffer[i];
+    }
+    printf("  Non-zero bytes: %d / %zu\n", non_zero_count, buffer.size());
+    printf("  Average value: %u\n", (uint32_t)(sum / buffer.size()));
+    printf("  First 64 bytes (raw): ");
+    for (int i = 0; i < 64 && i < (int)buffer.size(); i++) {
         printf("%02x ", buffer[i]);
-        if ((i + 1) % 16 == 0)
-        {
-            printf("\n");
-        }
+        if ((i + 1) % 16 == 0) printf("\n                         ");
+    }
+    printf("\n");
+    
+    // Analyze pattern to detect YUYV vs UYVY
+    printf("  Byte pattern analysis:\n");
+    printf("    Even bytes (0,2,4...): ");
+    for (int i = 0; i < 32 && i < (int)buffer.size(); i += 2) {
+        printf("%02x ", buffer[i]);
+    }
+    printf("\n    Odd bytes (1,3,5...):  ");
+    for (int i = 1; i < 32 && i < (int)buffer.size(); i += 2) {
+        printf("%02x ", buffer[i]);
     }
     printf("\n\n");
 
-    printf("Example complete! Camera is operational.\n");
-    printf("You can now modify this code to process frames.\n");
+    // ASCII characters for different brightness levels (dark to bright)
+    const char ascii_chars[] = " .:-=+*#%@";
+    const int  num_chars     = sizeof(ascii_chars) - 1;
 
-    // Keep running
+    // Display settings - scale down the image for terminal display
+    const int display_width  = 80;  // Terminal width in characters
+    const int display_height = 30;  // Terminal height in characters
+    const int x_step         = camera.getWidth() / display_width;
+    const int y_step         = camera.getHeight() / display_height;
+
+    printf("Starting ASCII mirror (press Ctrl+C to stop)...\n");
+    printf("Capturing continuous frames at %dx%d\n\n", camera.getWidth(), camera.getHeight());
+    sleep_ms(1000);
+
+    // Try different byte offsets to find correct YUV format
+    // 0 = YUYV (Y at even bytes), 1 = UYVY (Y at odd bytes)
+    int y_offset = 0;  // Start with YUYV, toggle to 1 if image looks wrong
+    bool bit_reverse = false;  // Set to true if bits are reversed
+    
+    // Helper function to reverse bits in a byte
+    auto reverse_bits = [](uint8_t b) -> uint8_t {
+        b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
+        b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
+        b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
+        return b;
+    };
+
+    // Continuous capture loop
     while (true)
     {
-        tight_loop_contents();
+        // Capture a frame
+        if (camera.capture(buffer.data(), buffer.size()))
+        {
+            // Clear screen (ANSI escape code)
+            printf("\033[2J\033[H");
+
+            // Convert frame to ASCII art
+            // YUV422 format: Y0 U0 Y1 V0 (2 pixels per 4 bytes)
+            // We only use Y (luminance) for grayscale
+            for (int y = 0; y < display_height; y++)
+            {
+                for (int x = 0; x < display_width; x++)
+                {
+                    // Sample pixel from frame
+                    int src_x       = x * x_step;
+                    int src_y       = y * y_step;
+                    int pixel_index = (src_y * camera.getWidth() + src_x) * 2;  // 2 bytes per pixel in YUV422
+
+                    if (pixel_index < (int) buffer.size())
+                    {
+                        // Get Y (luminance) value (0-255)
+                        // Try both YUYV (y_offset=0) and UYVY (y_offset=1)
+                        uint8_t luminance = buffer[pixel_index + y_offset];
+                        
+                        // Optionally reverse bits if data is bit-reversed
+                        if (bit_reverse) {
+                            luminance = reverse_bits(luminance);
+                        }
+
+                        // Map luminance to ASCII character
+                        int char_index = (luminance * num_chars) / 256;
+                        if (char_index >= num_chars)
+                            char_index = num_chars - 1;
+
+                        // Print character twice for better aspect ratio
+                        printf("%c%c", ascii_chars[char_index], ascii_chars[char_index]);
+                    }
+                    else
+                    {
+                        printf("  ");
+                    }
+                }
+                printf("\n");
+            }
+
+            printf("\n[Frame: %dx%d | Display: %dx%d | Format: %s%s | Press Ctrl+C to stop]\n",
+                   camera.getWidth(),
+                   camera.getHeight(),
+                   display_width,
+                   display_height,
+                   y_offset == 0 ? "YUYV" : "UYVY",
+                   bit_reverse ? " (bit-reversed)" : "");
+        }
+        else
+        {
+            printf("Frame capture failed!\n");
+        }
+
+        // Small delay between frames
+        sleep_ms(100);
     }
 
     return 0;

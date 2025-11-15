@@ -6,34 +6,39 @@
 
 .program camera_capture
 
-; Captures 8-bit parallel camera data gated by VSYNC and HREF
-; Data pins: 8 contiguous GPIOs (D2-D9)
-; PCLK: pixel clock (sample on rising edge)
-; HREF: horizontal reference (line valid)
-; VSYNC: vertical sync (frame valid)
+; Captures 8-bit parallel camera data gated by HREF
+; Based on working OV7670 implementation
 ;
-; NOTE: wait gpio instructions use ABSOLUTE GPIO numbers
-; This program is configured for:
-;   VSYNC = GP4, HREF = GP3, PCLK = GP6
-; If your pins are different, you must modify this program
+; Expected contiguous pin layout starting from pin_base:
+;   pins 0-7: D2-D9 (data bits) - GP11-18
+;   pin 8:    PCLK - GP6 won't work, not contiguous!
 ;
-; Autopush configured for 8 bits
-; JMP pin configured as HREF
+; PROBLEM: OV5640 pins are NOT contiguous. D2-D9 are GP11-18, but PCLK is GP6 and HREF is GP3
+; We need to reorganize or use absolute GPIO in wait instructions
+;
+; Let's use a hybrid: relative pins for data (in pins), absolute for control signals
 
 .wrap_target
-wait_frame:
-    wait 0 gpio 4           ; Wait for VSYNC low (between frames)
-    wait 1 gpio 4           ; Wait for VSYNC high (frame start)
-    
-wait_line:
-    wait 1 gpio 3           ; Wait for HREF high (line valid)
-    
-capture_pixel:
-    wait 1 gpio 6           ; Wait for PCLK rising edge
-    in pins, 8              ; Sample 8 data bits and push to FIFO
-    jmp pin capture_pixel   ; If HREF still high, continue capturing pixels
-    jmp wait_line           ; HREF low, wait for next line
+    wait 1 gpio 3           ; Wait for HREF high (absolute GP3)
+    wait 1 gpio 6           ; Wait for PCLK rising (absolute GP6)
+    in pins, 8              ; Sample 8 data bits from pin_base
+    wait 0 gpio 6           ; Wait for PCLK falling
 .wrap
+
+; Original gated version (commented out for testing):
+; wait_frame:
+;     wait 0 gpio 4           ; Wait for VSYNC low (between frames)
+;     wait 1 gpio 4           ; Wait for VSYNC high (frame start)
+;     
+; wait_line:
+;     wait 1 gpio 3           ; Wait for HREF high (line valid)
+;     
+; capture_pixel:
+;     wait 1 gpio 6           ; Wait for PCLK rising edge
+;     in pins, 8              ; Sample 8 data bits and push to FIFO
+;     jmp pin capture_pixel   ; If HREF still high, continue capturing pixels
+;     jmp wait_line           ; HREF low, wait for next line
+; .wrap
 
 % c-sdk {
 #include "hardware/gpio.h"
@@ -42,13 +47,14 @@ static inline void camera_capture_program_init(
     PIO pio, uint sm, uint offset,
     uint data_pin_base, uint pclk_pin, uint href_pin, uint vsync_pin)
 {
-    // Initialize data pins as PIO inputs
+    // Initialize data pins as PIO inputs (8 contiguous pins)
     for (uint i = 0; i < 8; i++) {
         pio_gpio_init(pio, data_pin_base + i);
+        gpio_set_pulls(data_pin_base + i, false, false);
     }
     pio_sm_set_consecutive_pindirs(pio, sm, data_pin_base, 8, false);
     
-    // Initialize control pins as inputs with no pulls
+    // Initialize control pins as inputs (PIO will read them via wait gpio)
     pio_gpio_init(pio, pclk_pin);
     pio_gpio_init(pio, href_pin);
     pio_gpio_init(pio, vsync_pin);
@@ -59,16 +65,13 @@ static inline void camera_capture_program_init(
     // Get default config
     pio_sm_config c = camera_capture_program_get_default_config(offset);
     
-    // Configure IN pins (data bus)
+    // Configure IN pins to read from data_pin_base
     sm_config_set_in_pins(&c, data_pin_base);
     
-    // Configure JMP pin (HREF for conditional jump)
-    sm_config_set_jmp_pin(&c, href_pin);
+    // Configure autopush: shift LEFT (MSB first), autopush every 8 bits
+    sm_config_set_in_shift(&c, false, true, 8);
     
-    // Configure autopush: shift right, autopush at 8 bits
-    sm_config_set_in_shift(&c, true, true, 8);
-    
-    // Join FIFOs for RX only (deeper RX FIFO for buffering)
+    // Join FIFOs for deeper RX buffer
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
     
     // Run at full speed
